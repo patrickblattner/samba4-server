@@ -158,6 +158,8 @@ else
 fi
 
 cat > "${DEPLOY_DIR}/docker-compose.yml" <<YAML
+name: samba4-server
+
 services:
 
   # -----------------------------------------------
