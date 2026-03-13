@@ -1,7 +1,8 @@
 #!/bin/bash
 # ============================================================================
 # Samba 4 AD DC - Docker Setup Script
-# Creates a local Samba Active Directory Domain Controller for development
+# Creates a local Samba Active Directory Domain Controller for lab use
+# NOT for production — this is a development/testing environment
 # ============================================================================
 
 set -euo pipefail
@@ -29,7 +30,7 @@ docker info >/dev/null 2>&1     || error "Docker is not running. Please start Do
 
 echo ""
 echo -e "${CYAN}========================================${NC}"
-echo -e "${CYAN}  Samba 4 AD DC - Setup${NC}"
+echo -e "${CYAN}  Samba 4 AD DC - Lab Setup${NC}"
 echo -e "${CYAN}========================================${NC}"
 echo ""
 
@@ -63,14 +64,26 @@ while true; do
   break
 done
 
-read -rp "Bind IP address [127.0.0.1]: " BIND_IP
-BIND_IP="${BIND_IP:-127.0.0.1}"
+echo ""
+echo -e "${CYAN}── Network binding ──────────────────────${NC}"
+echo ""
+echo "  1) Internal only (127.0.0.1) — accessible only from this machine"
+echo "  2) External (0.0.0.0) — accessible from the local network"
+echo ""
+read -rp "Binding mode [1]: " BIND_MODE
+BIND_MODE="${BIND_MODE:-1}"
 
-read -rp "LDAP port [389]: " LDAP_PORT
-LDAP_PORT="${LDAP_PORT:-389}"
-
-read -rp "LDAPS port [636]: " LDAPS_PORT
-LDAPS_PORT="${LDAPS_PORT:-636}"
+case "${BIND_MODE}" in
+  2)
+    BIND_IP="0.0.0.0"
+    warn "External binding selected — DC will be accessible from the network!"
+    warn "This is a lab server. Do NOT expose to untrusted networks."
+    echo ""
+    ;;
+  *)
+    BIND_IP="127.0.0.1"
+    ;;
+esac
 
 read -rp "phpLDAPadmin port [8090]: " PLA_PORT
 PLA_PORT="${PLA_PORT:-8090}"
@@ -93,10 +106,20 @@ echo "  Domain:          ${DOMAIN_FQDN}"
 echo "  Realm:           ${REALM}"
 echo "  NetBIOS:         ${NETBIOS}"
 echo "  Base DN:         ${DOMAIN_DC}"
-echo "  Bind IP:         ${BIND_IP}"
-echo "  LDAP:            ${BIND_IP}:${LDAP_PORT}"
-echo "  LDAPS:           ${BIND_IP}:${LDAPS_PORT}"
-echo "  phpLDAPadmin:    http://${BIND_IP}:${PLA_PORT}"
+echo "  Binding:         ${BIND_IP} ($([ "${BIND_IP}" = "127.0.0.1" ] && echo "internal only" || echo "external"))"
+echo ""
+echo "  Ports (all on ${BIND_IP}):"
+echo "    DNS:             53  (TCP+UDP)"
+echo "    Kerberos:        88  (TCP+UDP)"
+echo "    RPC:             135 (TCP)"
+echo "    NetBIOS:         137 (UDP), 138 (UDP), 139 (TCP)"
+echo "    LDAP:            389 (TCP+UDP)"
+echo "    SMB:             445 (TCP)"
+echo "    Kerberos PW:     464 (TCP+UDP)"
+echo "    LDAPS:           636 (TCP)"
+echo "    Global Catalog:  3268 (TCP), 3269 (TCP)"
+echo "    phpLDAPadmin:    ${PLA_PORT} (TCP)"
+echo ""
 echo "  Docker subnet:   ${SUBNET}"
 echo "  Samba IP:        ${SAMBA_IP}"
 echo "  Test data:       ${INSTALL_SEED}"
@@ -117,6 +140,8 @@ services:
 
   # -----------------------------------------------
   # Samba 4 - Active Directory Domain Controller
+  # Full DC: DNS, Kerberos, LDAP, SMB, NetBIOS,
+  # Global Catalog, RPC
   # -----------------------------------------------
   samba-ad:
     image: diegogslomp/samba-ad-dc:latest
@@ -132,8 +157,32 @@ services:
     volumes:
       - samba-data:/var/lib/samba
     ports:
-      - "${BIND_IP}:${LDAP_PORT}:389"
-      - "${BIND_IP}:${LDAPS_PORT}:636"
+      # DNS
+      - "${BIND_IP}:53:53/tcp"
+      - "${BIND_IP}:53:53/udp"
+      # Kerberos
+      - "${BIND_IP}:88:88/tcp"
+      - "${BIND_IP}:88:88/udp"
+      # RPC Endpoint Mapper
+      - "${BIND_IP}:135:135/tcp"
+      # NetBIOS
+      - "${BIND_IP}:137:137/udp"
+      - "${BIND_IP}:138:138/udp"
+      - "${BIND_IP}:139:139/tcp"
+      # LDAP
+      - "${BIND_IP}:389:389/tcp"
+      - "${BIND_IP}:389:389/udp"
+      # SMB
+      - "${BIND_IP}:445:445/tcp"
+      # Kerberos Password Change
+      - "${BIND_IP}:464:464/tcp"
+      - "${BIND_IP}:464:464/udp"
+      # LDAPS
+      - "${BIND_IP}:636:636/tcp"
+      # Global Catalog
+      - "${BIND_IP}:3268:3268/tcp"
+      # Global Catalog SSL
+      - "${BIND_IP}:3269:3269/tcp"
     networks:
       ldap-net:
         ipv4_address: ${SAMBA_IP}
@@ -453,8 +502,6 @@ NETBIOS=${NETBIOS}
 DOMAIN_DC=${DOMAIN_DC}
 ADMIN_PASS=${ADMIN_PASS}
 BIND_IP=${BIND_IP}
-LDAP_PORT=${LDAP_PORT}
-LDAPS_PORT=${LDAPS_PORT}
 PLA_PORT=${PLA_PORT}
 SUBNET=${SUBNET}
 SAMBA_IP=${SAMBA_IP}
@@ -523,9 +570,16 @@ echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  Setup complete!${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
-echo "  LDAP URL:        ldap://${BIND_IP}:${LDAP_PORT}"
-echo "  LDAPS URL:       ldaps://${BIND_IP}:${LDAPS_PORT}"
-echo "  phpLDAPadmin:    http://${BIND_IP}:${PLA_PORT}"
+echo "  Binding:         ${BIND_IP} ($([ "${BIND_IP}" = "127.0.0.1" ] && echo "internal only" || echo "external"))"
+echo ""
+echo "  AD Services:"
+echo "    DNS:             ${BIND_IP}:53"
+echo "    Kerberos:        ${BIND_IP}:88"
+echo "    LDAP:            ldap://${BIND_IP}:389"
+echo "    LDAPS:           ldaps://${BIND_IP}:636"
+echo "    SMB:             ${BIND_IP}:445"
+echo "    Global Catalog:  ${BIND_IP}:3268"
+echo "    phpLDAPadmin:    http://${BIND_IP}:${PLA_PORT}"
 echo ""
 echo "  Bind DN:         CN=Administrator,CN=Users,${DOMAIN_DC}"
 echo "  Admin Password:  (as configured)"
@@ -552,6 +606,7 @@ echo "  Useful commands:"
 echo "    docker exec samba-ad samba-tool user list"
 echo "    docker exec samba-ad samba-tool group list"
 echo "    docker exec samba-ad samba-tool group listmembers Engineers"
+echo "    docker exec samba-ad samba-tool dns query dc1 ${DOMAIN_FQDN} @ ALL"
 echo ""
 echo "  Teardown:"
 echo "    ./teardown.sh"

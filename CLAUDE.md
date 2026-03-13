@@ -2,8 +2,9 @@
 
 ## What this project does
 
-Lokaler Samba 4 Active Directory Domain Controller als Docker-Setup mit interaktivem Setup-Script.
-Dient als Entwicklungs- und Test-Umgebung fuer Applikationen, die LDAP/AD-Authentifizierung benoetigen.
+Vollstaendiger Samba 4 Active Directory Domain Controller als Docker-Setup mit interaktivem Setup-Script.
+Lab-DC fuer Entwicklung und Tests — NICHT fuer Produktion.
+Ersetzt einen Windows Server DC fuer Szenarien wie LDAP, Kerberos, SMB, DNS und AD-Authentifizierung.
 
 ## Key references
 
@@ -23,9 +24,10 @@ Use `/task setup` to configure GitHub integration for this project.
 
 - **Docker Image:** `diegogslomp/samba-ad-dc:latest` (Docker Hub)
 - **Services:**
-  - `samba-ad` — Samba 4 AD DC (Ports: LDAP 389, LDAPS 636)
+  - `samba-ad` — Vollstaendiger AD DC (DNS 53, Kerberos 88/464, RPC 135, NetBIOS 137-139, LDAP 389, SMB 445, LDAPS 636, Global Catalog 3268/3269)
   - `phpldapadmin` — Web GUI (Port: 8090)
   - `ldap-seed` — Einmaliger Seed-Container fuer Testdaten
+- **Binding:** Konfigurierbar — `127.0.0.1` (intern) oder `0.0.0.0` (extern/Netzwerk)
 - **Env-Vars des Images:** `DOMAIN`, `REALM` (uppercase!), `ADMIN_PASS`, `DNS_FORWARDER`, `BIND_NETWORK_INTERFACES`
 - `BIND_NETWORK_INTERFACES` muss auf `"false"` stehen, sonst bindet Samba LDAP nur auf 127.0.0.1 im Container
 - Healthcheck: `samba-tool domain info 127.0.0.1` (nicht die Container-IP)
