@@ -42,11 +42,12 @@ IFS='.' read -ra DOMAIN_PARTS <<< "${DOMAIN_FQDN}"
 [ "${#DOMAIN_PARTS[@]}" -ne 2 ] && error "Domain must have exactly two parts (e.g. lab.dev)"
 
 DOMAIN_DC="DC=${DOMAIN_PARTS[0]},DC=${DOMAIN_PARTS[1]}"
-REALM="${DOMAIN_FQDN^^}"
+REALM="$(echo "${DOMAIN_FQDN}" | tr '[:lower:]' '[:upper:]')"
+DEFAULT_NETBIOS="$(echo "${DOMAIN_PARTS[0]}" | tr '[:lower:]' '[:upper:]')"
 
-read -rp "NetBIOS domain name [${DOMAIN_PARTS[0]^^}]: " NETBIOS
-NETBIOS="${NETBIOS:-${DOMAIN_PARTS[0]^^}}"
-NETBIOS="${NETBIOS^^}"
+read -rp "NetBIOS domain name [${DEFAULT_NETBIOS}]: " NETBIOS
+NETBIOS="${NETBIOS:-${DEFAULT_NETBIOS}}"
+NETBIOS="$(echo "${NETBIOS}" | tr '[:lower:]' '[:upper:]')"
 
 while true; do
   read -rsp "Admin password (min 8 chars, upper+lower+number+special): " ADMIN_PASS
@@ -488,7 +489,7 @@ echo "Base DN:  __DOMAIN_DC__"
 SEEDSCRIPT
 
 # Replace placeholders in run-seed.sh
-REALM_LOWER="${REALM,,}"
+REALM_LOWER="$(echo "${REALM}" | tr '[:upper:]' '[:lower:]')"
 sed -i '' "s|__DOMAIN_DC__|${DOMAIN_DC}|g" "${DEPLOY_DIR}/ldif/run-seed.sh"
 sed -i '' "s|__REALM_LOWER__|${REALM_LOWER}|g" "${DEPLOY_DIR}/ldif/run-seed.sh"
 chmod +x "${DEPLOY_DIR}/ldif/run-seed.sh"
