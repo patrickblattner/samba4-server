@@ -136,6 +136,27 @@ DEPLOY_DIR="${SCRIPT_DIR}/deploy"
 mkdir -p "${DEPLOY_DIR}/ldif"
 
 info "Generating docker-compose.yml..."
+
+# Detect macOS — Docker Desktop has issues binding some UDP ports to 127.0.0.1
+SKIP_NETBIOS="false"
+if [ "$(uname)" = "Darwin" ] && [ "${BIND_IP}" = "127.0.0.1" ]; then
+  SKIP_NETBIOS="true"
+  warn "macOS detected with internal binding — NetBIOS ports (137/138 UDP)"
+  warn "will be skipped (Docker Desktop limitation). SMB (445) still works."
+fi
+
+# Build port mappings
+NETBIOS_PORTS=""
+if [ "${SKIP_NETBIOS}" = "false" ]; then
+  NETBIOS_PORTS="      # NetBIOS
+      - \"${BIND_IP}:137:137/udp\"
+      - \"${BIND_IP}:138:138/udp\"
+      - \"${BIND_IP}:139:139/tcp\""
+else
+  NETBIOS_PORTS="      # NetBIOS (skipped — macOS/Docker Desktop limitation)
+      - \"${BIND_IP}:139:139/tcp\""
+fi
+
 cat > "${DEPLOY_DIR}/docker-compose.yml" <<YAML
 services:
 
@@ -166,10 +187,7 @@ services:
       - "${BIND_IP}:88:88/udp"
       # RPC Endpoint Mapper
       - "${BIND_IP}:135:135/tcp"
-      # NetBIOS
-      - "${BIND_IP}:137:137/udp"
-      - "${BIND_IP}:138:138/udp"
-      - "${BIND_IP}:139:139/tcp"
+${NETBIOS_PORTS}
       # LDAP
       - "${BIND_IP}:389:389/tcp"
       - "${BIND_IP}:389:389/udp"
